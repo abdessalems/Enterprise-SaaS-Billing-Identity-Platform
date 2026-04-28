@@ -9,6 +9,7 @@ import com.saas.entity.User;
 import com.saas.exception.EmailAlreadyExistsException;
 import com.saas.repository.UserRepository;
 import com.saas.security.JwtUtils;
+import com.saas.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -25,6 +26,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final AuthenticationManager authenticationManager;
+    private final SubscriptionService subscriptionService;
 
     @Value("${application.security.jwt.expiration}")
     private long jwtExpiration;
@@ -43,7 +45,8 @@ public class AuthService {
             .role(Role.USER)
             .build();
 
-        userRepository.save(user);
+        userRepository.saveAndFlush(user);
+        subscriptionService.createFreeSubscription(user);
 
         return buildAuthResponse(user);
     }

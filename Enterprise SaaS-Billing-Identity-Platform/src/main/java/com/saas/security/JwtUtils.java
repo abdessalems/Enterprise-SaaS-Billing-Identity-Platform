@@ -1,5 +1,6 @@
 package com.saas.security;
 
+import com.saas.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -22,8 +23,11 @@ public class JwtUtils {
     private long expiration;
 
     public String generateToken(UserDetails userDetails) {
+        User user = (User) userDetails;
         return Jwts.builder()
-            .subject(userDetails.getUsername())
+            .subject(user.getUsername())
+            .claim("userId", user.getId().toString())
+            .claim("role", user.getRole().name())
             .issuedAt(new Date(System.currentTimeMillis()))
             .expiration(new Date(System.currentTimeMillis() + expiration))
             .signWith(getSigningKey())
