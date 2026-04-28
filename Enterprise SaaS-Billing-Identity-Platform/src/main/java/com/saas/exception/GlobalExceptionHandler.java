@@ -68,6 +68,18 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(SubscriptionException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionException(SubscriptionException ex) {
+        log.warn("Subscription error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse.builder()
+                .status(HttpStatus.BAD_REQUEST.value())
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .build()
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         log.error("Unexpected error", ex);
