@@ -3,6 +3,7 @@ package com.saas.service;
 import com.saas.dto.auth.AuthResponse;
 import com.saas.dto.auth.LoginRequest;
 import com.saas.dto.auth.RegisterRequest;
+import com.saas.dto.auth.UserResponse;
 import com.saas.entity.Role;
 import com.saas.entity.User;
 import com.saas.exception.EmailAlreadyExistsException;
@@ -44,10 +45,7 @@ public class AuthService {
 
         userRepository.save(user);
 
-        return AuthResponse.builder()
-            .accessToken(jwtUtils.generateToken(user))
-            .expiresIn(jwtExpiration)
-            .build();
+        return buildAuthResponse(user);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -57,9 +55,28 @@ public class AuthService {
 
         User user = userRepository.findByEmail(request.getEmail()).orElseThrow();
 
+        return buildAuthResponse(user);
+    }
+
+    // ─── private helpers ─────────────────────────────────────────────────────────
+
+    private AuthResponse buildAuthResponse(User user) {
         return AuthResponse.builder()
             .accessToken(jwtUtils.generateToken(user))
             .expiresIn(jwtExpiration)
+            .user(toUserResponse(user))
+            .build();
+    }
+
+    private UserResponse toUserResponse(User user) {
+        return UserResponse.builder()
+            .id(user.getId())
+            .firstName(user.getFirstName())
+            .lastName(user.getLastName())
+            .email(user.getEmail())
+            .role(user.getRole().name())
+            .active(user.isEnabled())
+            .createdAt(user.getCreatedAt())
             .build();
     }
 }
