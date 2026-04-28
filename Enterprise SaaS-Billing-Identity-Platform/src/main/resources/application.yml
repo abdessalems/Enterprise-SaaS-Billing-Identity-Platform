@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: enterprise-saas-platform
+
+  # ─── Datasource ──────────────────────────────────────────────────────────────
+  datasource:
+    url: jdbc:postgresql://localhost:5432/saas_db
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: SaaSHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 20000   # 20 s
+      idle-timeout: 300000        # 5 min
+      max-lifetime: 1200000       # 20 min
+      auto-commit: false
+
+  # ─── JPA / Hibernate ─────────────────────────────────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: update            # use 'validate' in production with Flyway/Liquibase
+    show-sql: false
+    open-in-view: false           # prevents lazy-loading pitfalls in REST APIs
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: public
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  # ─── DevTools ────────────────────────────────────────────────────────────────
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: false
+
+# ─── Server ────────────────────────────────────────────────────────────────────
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+    include-exception: false
+
+# ─── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.saas: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# ─── Application Security ──────────────────────────────────────────────────────
+application:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      expiration: 86400000        # 24 hours in milliseconds
