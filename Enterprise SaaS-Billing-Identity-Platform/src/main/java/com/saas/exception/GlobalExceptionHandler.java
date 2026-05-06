@@ -80,6 +80,18 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(PlanAccessException.class)
+    public ResponseEntity<ErrorResponse> handlePlanAccess(PlanAccessException ex) {
+        log.warn("Plan access denied: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+            ErrorResponse.builder()
+                .status(HttpStatus.FORBIDDEN.value())
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .build()
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         log.error("Unexpected error", ex);
