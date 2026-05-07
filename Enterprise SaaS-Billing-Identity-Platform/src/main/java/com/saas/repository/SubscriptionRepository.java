@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -18,7 +19,8 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
 
     boolean existsByUserAndStatus(User user, SubscriptionStatus status);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
+    @Transactional
     @Query("UPDATE Subscription s SET s.status = :newStatus WHERE s.status = :currentStatus AND s.endDate < :today")
     int markExpiredSubscriptions(
         @Param("newStatus") SubscriptionStatus newStatus,

@@ -41,7 +41,7 @@ class AuthIntegrationTest {
     @Test
     void register_returnsCreatedWithJwt() {
         ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
-            "/api/v1/auth/register", registerRequest("register1@test.com"), AuthResponse.class);
+            "/auth/register", registerRequest("register1@test.com"), AuthResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
@@ -52,10 +52,10 @@ class AuthIntegrationTest {
 
     @Test
     void register_returnsConflict_whenEmailAlreadyTaken() {
-        restTemplate.postForEntity("/api/v1/auth/register",
+        restTemplate.postForEntity("/auth/register",
             registerRequest("duplicate@test.com"), Object.class);
 
-        ResponseEntity<Object> response = restTemplate.postForEntity("/api/v1/auth/register",
+        ResponseEntity<Object> response = restTemplate.postForEntity("/auth/register",
             registerRequest("duplicate@test.com"), Object.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -67,14 +67,14 @@ class AuthIntegrationTest {
         req.setPassword("123");
 
         ResponseEntity<Object> response = restTemplate.postForEntity(
-            "/api/v1/auth/register", req, Object.class);
+            "/auth/register", req, Object.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     @Test
     void login_returnsOkWithJwt_forValidCredentials() {
-        restTemplate.postForEntity("/api/v1/auth/register",
+        restTemplate.postForEntity("/auth/register",
             registerRequest("login@test.com"), Object.class);
 
         LoginRequest login = new LoginRequest();
@@ -82,7 +82,7 @@ class AuthIntegrationTest {
         login.setPassword("password123");
 
         ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
-            "/api/v1/auth/login", login, AuthResponse.class);
+            "/auth/login", login, AuthResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getAccessToken()).isNotBlank();
@@ -90,7 +90,7 @@ class AuthIntegrationTest {
 
     @Test
     void login_returnsUnauthorized_forWrongPassword() {
-        restTemplate.postForEntity("/api/v1/auth/register",
+        restTemplate.postForEntity("/auth/register",
             registerRequest("wrongpass@test.com"), Object.class);
 
         LoginRequest login = new LoginRequest();
@@ -98,7 +98,7 @@ class AuthIntegrationTest {
         login.setPassword("wrongpassword");
 
         ResponseEntity<Object> response = restTemplate.postForEntity(
-            "/api/v1/auth/login", login, Object.class);
+            "/auth/login", login, Object.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
@@ -106,7 +106,7 @@ class AuthIntegrationTest {
     @Test
     void register_automaticallyCreatesFreePlanSubscription() {
         ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
-            "/api/v1/auth/register", registerRequest("freesub@test.com"), AuthResponse.class);
+            "/auth/register", registerRequest("freesub@test.com"), AuthResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody().getUser().getRole()).isEqualTo("USER");
