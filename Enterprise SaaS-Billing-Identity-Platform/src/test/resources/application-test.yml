@@ -1,0 +1,15 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  devtools:
+    restart:
+      enabled: false
+
+logging:
+  level:
+    com.saas: WARN
+    org.hibernate.SQL: WARN
+    org.testcontainers: WARN
+    com.zaxxer.hikari: WARN
