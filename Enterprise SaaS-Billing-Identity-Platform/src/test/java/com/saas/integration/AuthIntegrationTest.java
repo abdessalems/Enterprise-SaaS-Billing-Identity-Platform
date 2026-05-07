@@ -1,5 +1,6 @@
 package com.saas.integration;
 
+import com.saas.dto.ApiResponse;
 import com.saas.dto.auth.AuthResponse;
 import com.saas.dto.auth.LoginRequest;
 import com.saas.dto.auth.RegisterRequest;
@@ -8,6 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
@@ -29,6 +33,9 @@ class AuthIntegrationTest {
     @Autowired
     private TestRestTemplate restTemplate;
 
+    private static final ParameterizedTypeReference<ApiResponse<AuthResponse>> AUTH_RESPONSE_TYPE =
+        new ParameterizedTypeReference<>() {};
+
     private RegisterRequest registerRequest(String email) {
         RegisterRequest req = new RegisterRequest();
         req.setFirstName("Abdessalem");
@@ -38,16 +45,26 @@ class AuthIntegrationTest {
         return req;
     }
 
+    private ResponseEntity<ApiResponse<AuthResponse>> postRegister(String email) {
+        return restTemplate.exchange(
+            "/auth/register",
+            HttpMethod.POST,
+            new HttpEntity<>(registerRequest(email)),
+            AUTH_RESPONSE_TYPE
+        );
+    }
+
     @Test
     void register_returnsCreatedWithJwt() {
-        ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
-            "/auth/register", registerRequest("register1@test.com"), AuthResponse.class);
+        ResponseEntity<ApiResponse<AuthResponse>> response = postRegister("register1@test.com");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getAccessToken()).isNotBlank();
-        assertThat(response.getBody().getTokenType()).isEqualTo("Bearer");
-        assertThat(response.getBody().getUser().getEmail()).isEqualTo("register1@test.com");
+        AuthResponse auth = response.getBody().getData();
+        assertThat(auth).isNotNull();
+        assertThat(auth.getAccessToken()).isNotBlank();
+        assertThat(auth.getTokenType()).isEqualTo("Bearer");
+        assertThat(auth.getUser().getEmail()).isEqualTo("register1@test.com");
     }
 
     @Test
@@ -74,24 +91,26 @@ class AuthIntegrationTest {
 
     @Test
     void login_returnsOkWithJwt_forValidCredentials() {
-        restTemplate.postForEntity("/auth/register",
-            registerRequest("login@test.com"), Object.class);
+        postRegister("login@test.com");
 
         LoginRequest login = new LoginRequest();
         login.setEmail("login@test.com");
         login.setPassword("password123");
 
-        ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
-            "/auth/login", login, AuthResponse.class);
+        ResponseEntity<ApiResponse<AuthResponse>> response = restTemplate.exchange(
+            "/auth/login",
+            HttpMethod.POST,
+            new HttpEntity<>(login),
+            AUTH_RESPONSE_TYPE
+        );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().getAccessToken()).isNotBlank();
+        assertThat(response.getBody().getData().getAccessToken()).isNotBlank();
     }
 
     @Test
     void login_returnsUnauthorized_forWrongPassword() {
-        restTemplate.postForEntity("/auth/register",
-            registerRequest("wrongpass@test.com"), Object.class);
+        postRegister("wrongpass@test.com");
 
         LoginRequest login = new LoginRequest();
         login.setEmail("wrongpass@test.com");
@@ -105,10 +124,9 @@ class AuthIntegrationTest {
 
     @Test
     void register_automaticallyCreatesFreePlanSubscription() {
-        ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
-            "/auth/register", registerRequest("freesub@test.com"), AuthResponse.class);
+        ResponseEntity<ApiResponse<AuthResponse>> response = postRegister("freesub@test.com");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody().getUser().getRole()).isEqualTo("USER");
+        assertThat(response.getBody().getData().getUser().getRole()).isEqualTo("USER");
     }
 }
