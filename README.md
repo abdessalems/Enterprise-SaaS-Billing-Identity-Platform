@@ -1,8 +1,10 @@
 # Enterprise SaaS Billing & Identity Platform
 
 A **production-ready SaaS backend** built with Spring Boot 3.4.5 and Java 21.
-Covers JWT authentication, multi-tenancy, subscription billing, usage tracking,
-event-driven architecture, Docker, and CI/CD — designed for real-world backend engineering.
+Covers JWT authentication, subscription billing, plan-based access control,
+admin management, Docker, and CI/CD — designed for real-world backend engineering.
+
+[![CI/CD Pipeline](https://github.com/abdessalems/Enterprise-SaaS-Billing-Identity-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/abdessalems/Enterprise-SaaS-Billing-Identity-Platform/actions/workflows/ci.yml)
 
 ---
 
@@ -10,15 +12,14 @@ event-driven architecture, Docker, and CI/CD — designed for real-world backend
 
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
+- [Phases Roadmap](#phases-roadmap)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
-- [API Documentation (Swagger)](#api-documentation-swagger)
+- [API Reference](#api-reference)
 - [Authentication Flow](#authentication-flow)
+- [Docker](#docker)
+- [CI/CD Pipeline](#cicd-pipeline)
 - [Database](#database)
-- [Git Workflow](#git-workflow)
-- [Phases Roadmap](#phases-roadmap)
-- [Phase 0 — Project Setup](#phase-0--project-setup)
-- [Phase 1 — JWT Authentication](#phase-1--jwt-authentication)
 
 ---
 
@@ -29,15 +30,16 @@ event-driven architecture, Docker, and CI/CD — designed for real-world backend
 | Language | Java 21 |
 | Framework | Spring Boot 3.4.5 |
 | Security | Spring Security + JWT (JJWT 0.12.6) |
+| AOP | Spring AOP — plan-based access control |
 | Persistence | Spring Data JPA + Hibernate 6 |
 | Database | PostgreSQL 16 |
 | Connection Pool | HikariCP |
 | Validation | Jakarta Bean Validation |
 | API Docs | SpringDoc OpenAPI 2.8.9 (Swagger UI) |
 | Build Tool | Maven (mvnw wrapper) |
-| Dev Tools | Spring Boot DevTools |
 | Boilerplate | Lombok |
 | Containerization | Docker + Docker Compose |
+| CI/CD | GitHub Actions |
 
 ---
 
@@ -45,244 +47,61 @@ event-driven architecture, Docker, and CI/CD — designed for real-world backend
 
 ```
 src/main/java/com/saas/
-├── EnterpriseSaaSApplication.java   ← Spring Boot entry point
+├── EnterpriseSaaSApplication.java
+│
+├── annotation/
+│   └── RequiresPlan.java            ← Custom annotation for plan gating
+│
+├── aspect/
+│   └── PlanAccessAspect.java        ← AOP: enforces @RequiresPlan at runtime
 │
 ├── config/
-│   ├── AppConfig.java               ← AuthenticationProvider, AuthenticationManager, PasswordEncoder
-│   └── SwaggerConfig.java           ← OpenAPI / Swagger UI configuration
+│   ├── AppConfig.java               ← AuthProvider, PasswordEncoder, @EnableScheduling
+│   └── SwaggerConfig.java           ← OpenAPI / Swagger UI
 │
 ├── controller/
-│   └── AuthController.java          ← POST /auth/register, POST /auth/login
+│   ├── AuthController.java          ← POST /auth/register, POST /auth/login
+│   ├── SubscriptionController.java  ← Subscription CRUD endpoints
+│   ├── DashboardController.java     ← Plan-gated dashboard endpoints
+│   └── AdminController.java        ← Admin-only user & subscription management
 │
 ├── dto/
-│   ├── ApiResponse.java             ← Generic success/error wrapper
-│   └── auth/
-│       ├── RegisterRequest.java     ← Registration payload (validated)
-│       ├── LoginRequest.java        ← Login payload (validated)
-│       └── AuthResponse.java        ← JWT token response
+│   ├── ApiResponse.java
+│   ├── auth/                        ← RegisterRequest, LoginRequest, AuthResponse
+│   ├── subscription/                ← SubscriptionRequest, SubscriptionResponse
+│   └── admin/                       ← AdminUserResponse, AdminSubscriptionResponse
 │
 ├── entity/
-│   ├── User.java                    ← JPA entity + UserDetails implementation
-│   └── Role.java                    ← USER / ADMIN / MANAGER enum
+│   ├── User.java                    ← JPA entity + UserDetails
+│   ├── Role.java                    ← USER / ADMIN / MANAGER
+│   ├── Subscription.java            ← Subscription entity
+│   ├── Plan.java                    ← FREE / PRO / ENTERPRISE enum
+│   └── SubscriptionStatus.java     ← ACTIVE / EXPIRED / CANCELLED
 │
 ├── exception/
-│   ├── GlobalExceptionHandler.java  ← @RestControllerAdvice — centralised error handling
-│   ├── ErrorResponse.java           ← Uniform error JSON shape
-│   ├── ResourceNotFoundException.java   ← 404
-│   └── EmailAlreadyExistsException.java ← 409 Conflict
+│   ├── GlobalExceptionHandler.java
+│   ├── ErrorResponse.java
+│   ├── ResourceNotFoundException.java
+│   ├── EmailAlreadyExistsException.java
+│   └── PlanAccessException.java    ← 403 when plan is insufficient
 │
 ├── repository/
-│   └── UserRepository.java          ← findByEmail, existsByEmail
+│   ├── UserRepository.java
+│   └── SubscriptionRepository.java ← includes bulk expiry update query
+│
+├── scheduler/
+│   └── SubscriptionExpiryScheduler.java ← Daily job: marks expired subscriptions
 │
 ├── security/
-│   ├── SecurityConfig.java          ← Filter chain — stateless, CSRF off, JWT filter
-│   ├── JwtUtils.java                ← Generate / validate / extract JWT claims
-│   ├── JwtAuthFilter.java           ← OncePerRequestFilter — Bearer token → SecurityContext
-│   └── UserDetailsServiceImpl.java  ← Load user by email from DB
+│   ├── SecurityConfig.java          ← @EnableMethodSecurity, JWT filter chain
+│   ├── JwtUtils.java
+│   ├── JwtAuthFilter.java
+│   └── UserDetailsServiceImpl.java
 │
-├── service/
-│   └── AuthService.java             ← register() + login() business logic
-│
-└── util/
-    └── DateUtils.java               ← UTC-aware date helpers
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Java 21
-- Maven (or use the included `mvnw` wrapper)
-- PostgreSQL 16 running locally **or** Docker
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/abdessalems/Enterprise-SaaS-Billing-Identity-Platform.git
-cd Enterprise-SaaS-Billing-Identity-Platform/Enterprise\ SaaS-Billing-Identity-Platform
-```
-
-### 2. Start the database
-
-**Option A — Docker Compose (recommended)**
-```bash
-docker compose up -d
-```
-This starts PostgreSQL 16 on port `5432` and pgAdmin on port `5050`.
-
-**Option B — Local PostgreSQL**
-
-Make sure PostgreSQL is running, then create the database:
-```sql
-CREATE DATABASE saas_db;
-```
-
-### 3. Run the application
-
-```bash
-# Linux / macOS
-./mvnw spring-boot:run
-
-# Windows
-.\mvnw.cmd spring-boot:run
-```
-
-The app starts on **`http://localhost:8080/api/v1`**
-
----
-
-## Environment Variables
-
-All variables have sensible defaults for local development.
-Override them in production via environment variables or a secrets manager.
-
-| Variable | Default | Description |
-|---|---|---|
-| `DB_USERNAME` | `postgres` | PostgreSQL username |
-| `DB_PASSWORD` | `postgres` | PostgreSQL password |
-| `JWT_SECRET` | *(256-bit Base64 key)* | JWT signing secret — **change in production** |
-
-Example:
-```bash
-export DB_USERNAME=myuser
-export DB_PASSWORD=mypassword
-export JWT_SECRET=your-256-bit-base64-secret
-./mvnw spring-boot:run
-```
-
----
-
-## API Documentation (Swagger)
-
-Once the app is running, open:
-
-```
-http://localhost:8080/api/v1/swagger-ui/index.html
-```
-
-### How to authenticate in Swagger UI
-
-1. Call **`POST /auth/register`** or **`POST /auth/login`**
-2. Copy the `accessToken` from the response
-3. Click **Authorize** (lock icon, top right)
-4. Paste your token and click **Authorize**
-5. All protected endpoints now work directly from the UI
-
----
-
-## Authentication Flow
-
-```
-Client                          Server
-  │                               │
-  │── POST /auth/register ────────►│  Validate input
-  │   { firstName, lastName,      │  Check email not taken
-  │     email, password }         │  Hash password (BCrypt 12)
-  │                               │  Save User to DB
-  │◄── 201 { accessToken } ───────│  Generate JWT (24h)
-  │                               │
-  │── POST /auth/login ───────────►│  Authenticate credentials
-  │   { email, password }         │  Load user from DB
-  │                               │  Verify BCrypt hash
-  │◄── 200 { accessToken } ───────│  Generate JWT (24h)
-  │                               │
-  │── GET /protected ─────────────►│  JwtAuthFilter extracts Bearer token
-  │   Authorization: Bearer <jwt> │  Validate signature + expiry
-  │                               │  Set SecurityContext
-  │◄── 200 { data } ──────────────│  Handle request
-```
-
-### JWT Details
-
-| Property | Value |
-|---|---|
-| Algorithm | HMAC-SHA256 |
-| Expiration | 24 hours |
-| Library | JJWT 0.12.6 |
-| Location | `Authorization: Bearer <token>` header |
-
----
-
-## Database
-
-### Connection (HikariCP)
-
-```yaml
-url: jdbc:postgresql://localhost:5432/saas_db
-max-pool-size: 10
-min-idle: 5
-connection-timeout: 20s
-```
-
-### Users Table (auto-created by Hibernate)
-
-```sql
-CREATE TABLE users (
-    id                      UUID PRIMARY KEY,
-    first_name              VARCHAR(255) NOT NULL,
-    last_name               VARCHAR(255) NOT NULL,
-    email                   VARCHAR(255) NOT NULL UNIQUE,
-    password                VARCHAR(255) NOT NULL,
-    role                    VARCHAR(255) NOT NULL CHECK (role IN ('USER','ADMIN','MANAGER')),
-    enabled                 BOOLEAN NOT NULL DEFAULT TRUE,
-    account_non_expired     BOOLEAN NOT NULL DEFAULT TRUE,
-    account_non_locked      BOOLEAN NOT NULL DEFAULT TRUE,
-    credentials_non_expired BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at              TIMESTAMP,
-    updated_at              TIMESTAMP
-);
-```
-
-### pgAdmin
-
-Available at `http://localhost:5050` when using Docker Compose.
-- Email: `admin@saas.com`
-- Password: `admin`
-
----
-
-## Git Workflow
-
-This project follows **Git Flow**:
-
-```
-main          ← stable, production-ready releases only
-develop       ← integration branch, all features merge here
-feat/*        ← one branch per feature / phase
-hotfix/*      ← urgent production fixes branched off main
-```
-
-### Release tags
-
-| Tag | Description |
-|---|---|
-| `v0.1.0` | Phase 0 + Phase 1 — project setup and JWT authentication |
-| `v1.1.0` | Swagger UI / OpenAPI documentation |
-
-### Branch workflow per feature
-
-```bash
-# 1 — create feature branch from develop
-git checkout develop
-git checkout -b feat/phase-X-description
-
-# 2 — develop, commit
-git add <files>
-git commit -m "feat(phase-X): ..."
-
-# 3 — push and merge to develop
-git push origin feat/phase-X-description
-git checkout develop
-git merge --no-ff feat/phase-X-description
-git push origin develop
-
-# 4 — release to main with tag
-git checkout main
-git merge --no-ff develop
-git tag -a vX.X.X -m "Release description"
-git push origin main --tags
+└── service/
+    ├── AuthService.java
+    ├── SubscriptionService.java
+    └── AdminService.java
 ```
 
 ---
@@ -291,130 +110,225 @@ git push origin main --tags
 
 | Phase | Feature | Status |
 |---|---|---|
-| 0 | Project setup, Docker, package structure | ✅ Done |
-| 1 | JWT Authentication (register / login) | ✅ Done |
-| 1.1 | Swagger UI / OpenAPI docs | ✅ Done |
-| 2 | Tenant / Organization model (multi-tenancy) | 🔜 Next |
-| 3 | User management (profile, roles, CRUD) | 🔜 Planned |
-| 4 | Billing — Plan, Subscription, Invoice entities | 🔜 Planned |
-| 5 | Email verification + password reset | 🔜 Planned |
+| 0 | Project setup — Docker, package structure, error handling | ✅ Done |
+| 1 | JWT Authentication — register, login, stateless security | ✅ Done |
+| 1.1 | Swagger UI / OpenAPI documentation | ✅ Done |
+| 2 | Subscription System — plans, billing, lifecycle | ✅ Done |
+| 3 | Business Rules — AOP plan gating, expiry scheduler | ✅ Done |
+| 4 | Admin Module — user management, subscription overview | ✅ Done |
+| 5 | Docker + GitHub Actions CI/CD pipeline | ✅ Done |
 | 6 | Usage tracking + metered billing | 🔜 Planned |
 | 7 | Event-driven architecture (Kafka / RabbitMQ) | 🔜 Planned |
-| 8 | CI/CD pipeline (GitHub Actions) | 🔜 Planned |
 
 ---
 
-## Phase 0 — Project Setup
+## Getting Started
 
-**Branch:** `main` | **Tag:** `v0.1.0`
+### Prerequisites
 
-### What was built
+- Java 21
+- Docker Desktop
 
-- Clean `pom.xml` with Spring Boot 3.4.5, Java 21, and all required starters
-- `application.yml` replacing `application.properties` — HikariCP pool tuning, JPA/Hibernate settings, structured logging
-- `docker-compose.yml` — PostgreSQL 16 Alpine + pgAdmin with health checks, named volumes, and a dedicated bridge network
-- Full `com.saas` package tree bootstrapped: `config`, `controller`, `service`, `repository`, `entity`, `dto`, `security`, `exception`, `util`
-- `ApiResponse<T>` — generic success/error HTTP response wrapper
-- `ErrorResponse` — uniform error JSON shape
-- `GlobalExceptionHandler` — `@RestControllerAdvice` with handlers for validation, 404, 409, 401, and generic 500
-- `ResourceNotFoundException` — structured 404 with resource/field/value pattern
-- `DateUtils` — UTC-aware date formatting helpers
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/abdessalems/Enterprise-SaaS-Billing-Identity-Platform.git
+cd Enterprise-SaaS-Billing-Identity-Platform
+```
+
+### 2. Configure environment
+
+```bash
+cp "Enterprise SaaS-Billing-Identity-Platform/.env.example" "Enterprise SaaS-Billing-Identity-Platform/.env"
+```
+
+Edit `.env` and fill in your values (see [Environment Variables](#environment-variables)).
+
+### 3. Start everything with Docker Compose
+
+```bash
+cd "Enterprise SaaS-Billing-Identity-Platform"
+docker compose up -d
+```
+
+This starts three containers:
+- **saas-postgres** — PostgreSQL 16 on port `5432`
+- **saas-app** — Spring Boot app on port `8080`
+- **saas-pgadmin** — pgAdmin UI on port `5050`
+
+### 4. Open Swagger UI
+
+```
+http://localhost:8080/api/v1/swagger-ui/index.html
+```
+
+### Run locally without Docker
+
+```bash
+cd "Enterprise SaaS-Billing-Identity-Platform"
+
+# Windows
+.\mvnw.cmd spring-boot:run
+
+# Linux / macOS
+./mvnw spring-boot:run
+```
+
+Requires a local PostgreSQL instance with database `saas_db`.
 
 ---
 
-## Phase 1 — JWT Authentication
+## Environment Variables
 
-**Branch:** `main` | **Tag:** `v0.1.0`
+Copy `.env.example` to `.env` and set:
 
-### What was built
+| Variable | Description |
+|---|---|
+| `DB_HOST` | PostgreSQL host (`postgres` for Docker, `localhost` for local) |
+| `DB_NAME` | Database name (default: `saas_db`) |
+| `DB_USERNAME` | PostgreSQL username |
+| `DB_PASSWORD` | PostgreSQL password |
+| `JWT_SECRET` | 256-bit hex secret — generate with `openssl rand -hex 32` |
 
-#### Entities & Persistence
+---
 
-- **`User`** — JPA entity that implements `UserDetails`
-  - UUID primary key (generated by PostgreSQL)
-  - `firstName`, `lastName`, `email` (unique), `password` (BCrypt)
-  - `Role` enum: `USER`, `ADMIN`, `MANAGER`
-  - `@Builder.Default` flags: `enabled`, `accountNonExpired`, `accountNonLocked`, `credentialsNonExpired`
-  - `createdAt` / `updatedAt` via Hibernate `@CreationTimestamp` / `@UpdateTimestamp`
-  - Password excluded from `@ToString`
-- **`UserRepository`** — `findByEmail()` + `existsByEmail()`
+## API Reference
 
-#### Security
-
-- **`JwtUtils`** — JJWT 0.12 API
-  - `generateToken(UserDetails)` — signs with HMAC-SHA256, 24h expiry
-  - `extractUsername(token)` — reads subject claim
-  - `isTokenValid(token, userDetails)` — validates signature + expiry + username match
-- **`JwtAuthFilter`** — `OncePerRequestFilter`
-  - Extracts `Authorization: Bearer <token>` header
-  - Validates JWT and sets `SecurityContext`
-- **`UserDetailsServiceImpl`** — loads user by email from `UserRepository`
-- **`AppConfig`** — `DaoAuthenticationProvider` + `AuthenticationManager` + `BCryptPasswordEncoder(cost=12)`
-- **`SecurityConfig`** — stateless session, CSRF disabled, JWT filter before `UsernamePasswordAuthenticationFilter`
-
-#### API Endpoints
+### Authentication
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `POST` | `/api/v1/auth/register` | None | Create account, returns JWT |
 | `POST` | `/api/v1/auth/login` | None | Login, returns JWT |
 
-#### Request / Response Examples
+### Subscriptions
 
-**Register**
-```json
-POST /api/v1/auth/register
-{
-  "firstName": "Abdessalem",
-  "lastName": "Saadaoui",
-  "email": "abdessalemsaa@gmail.com",
-  "password": "secret123"
-}
-```
-```json
-HTTP 201
-{
-  "success": true,
-  "message": "Account created successfully",
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-    "tokenType": "Bearer",
-    "expiresIn": 86400000
-  },
-  "timestamp": "2026-04-28T18:14:55"
-}
-```
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/subscriptions` | JWT | Create subscription |
+| `GET` | `/api/v1/subscriptions/my` | JWT | Get current user's subscription |
+| `PUT` | `/api/v1/subscriptions/{id}` | JWT | Update subscription |
+| `DELETE` | `/api/v1/subscriptions/{id}` | JWT | Cancel subscription |
 
-**Login**
-```json
-POST /api/v1/auth/login
-{
-  "email": "abdessalemsaa@gmail.com",
-  "password": "secret123"
-}
-```
-```json
-HTTP 200
-{
-  "success": true,
-  "message": "Login successful",
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-    "tokenType": "Bearer",
-    "expiresIn": 86400000
-  },
-  "timestamp": "2026-04-28T18:14:55"
-}
-```
+### Dashboard (plan-gated)
 
-#### Error Responses
+| Method | Endpoint | Minimum Plan | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/dashboard/summary` | FREE | Basic summary |
+| `GET` | `/api/v1/dashboard/reports` | PRO | Advanced reports |
+| `GET` | `/api/v1/dashboard/analytics` | ENTERPRISE | Full analytics |
 
-| Scenario | Status | Message |
+### Admin (role: ADMIN only)
+
+| Method | Endpoint | Description |
 |---|---|---|
-| Email already registered | `409 Conflict` | Account already exists with email: ... |
-| Wrong password | `401 Unauthorized` | Invalid email or password |
-| Validation failure | `400 Bad Request` | Validation failed + field errors list |
-| Missing/invalid JWT | `403 Forbidden` | — |
+| `GET` | `/api/v1/admin/users` | List all users with their active plan |
+| `GET` | `/api/v1/admin/subscriptions` | List all subscriptions with user info |
+| `POST` | `/api/v1/admin/disable-user/{id}` | Disable a user account |
+
+### How to authenticate in Swagger UI
+
+1. Call `POST /auth/register` or `POST /auth/login`
+2. Copy the `accessToken` from the response
+3. Click **Authorize** (lock icon, top right)
+4. Paste your token and click **Authorize**
+
+---
+
+## Authentication Flow
+
+```
+Client                          Server
+  │                               │
+  │── POST /auth/register ────────►│  Validate → BCrypt(12) → Save
+  │◄── 201 { accessToken } ───────│  Generate JWT (24h)
+  │                               │
+  │── POST /auth/login ───────────►│  Authenticate → Verify hash
+  │◄── 200 { accessToken } ───────│  Generate JWT (24h)
+  │                               │
+  │── GET /dashboard/reports ─────►│  JwtAuthFilter → @RequiresPlan(PRO)
+  │   Authorization: Bearer <jwt> │  PlanAccessAspect checks subscription
+  │◄── 200 / 403 ─────────────────│
+```
+
+---
+
+## Docker
+
+### Build the image locally
+
+```bash
+cd "Enterprise SaaS-Billing-Identity-Platform"
+docker build -t enterprise-saas-platform .
+```
+
+### Run with Docker Compose
+
+```bash
+docker compose up -d        # start all services
+docker compose logs -f app  # follow app logs
+docker compose down         # stop all services
+```
+
+### Published image
+
+The latest image is automatically published to Docker Hub on every push to `main`:
+
+```bash
+docker pull bganda47/enterprise-saas-platform:latest
+```
+
+---
+
+## CI/CD Pipeline
+
+GitHub Actions runs on every push to `main` or `develop`.
+
+**Job 1 — Build & Test**
+- Starts a PostgreSQL 16 service container
+- Runs `mvn clean verify` (build + all tests)
+- Uploads Surefire test reports on failure
+
+**Job 2 — Docker Build & Push** *(main branch only)*
+- Builds the Docker image
+- Pushes to Docker Hub as:
+  - `bganda47/enterprise-saas-platform:latest`
+  - `bganda47/enterprise-saas-platform:<commit-sha>`
+
+**Required GitHub secrets:**
+
+| Secret | Description |
+|---|---|
+| `JWT_SECRET` | JWT signing key used during tests |
+| `DOCKERHUB_TOKEN` | Docker Hub personal access token |
+
+---
+
+## Database
+
+### pgAdmin
+
+Available at `http://localhost:5050` when using Docker Compose.
+- Email: `admin@saas.com`
+- Password: `admin`
+
+Connect to the server:
+- Host: `postgres`
+- Port: `5432`
+- Database: `saas_db`
+- Username / Password: from your `.env`
+
+### Key tables (auto-created by Hibernate)
+
+| Table | Description |
+|---|---|
+| `users` | Registered users with roles and status |
+| `subscriptions` | User subscriptions with plan, dates, and status |
+
+### Expiry Scheduler
+
+A scheduled job runs daily at midnight and automatically sets all subscriptions
+with `endDate < today` and status `ACTIVE` to `EXPIRED`.
 
 ---
 
